@@ -500,7 +500,7 @@ const SOUND_EVENT_MAP_REV = Object.fromEntries(Object.entries(SOUND_EVENT_MAP).m
 
 const LIMITS = { maxBytes: 512 * 1024 * 1024, maxEntries: 20000, maxEntryBytes: 256 * 1024 * 1024, maxTotalBytes: 1024 * 1024 * 1024, maxImageDimension: 16384 };
 let abortController = null;
-const state = { zip:null, fileName:'', outZip:null, reportBlob:null, texDims:{}, flipbooks:[], analysis:null };
+const state = { zip:null, fileName:'', outZip:null, reportBlob:null, texDims:{}, flipbooks:[], animationMappings:[], customMappings:[], analysis:null };
 let RUN = { converted:0, skipped:0, warnings:0, failed:0, fixes:[] }; // per-conversion report counters
 function safeZipPath(raw){
   const path = String(raw || '').replace(/\\/g,'/').replace(/\/+$/,'');
@@ -582,6 +582,7 @@ async function stageTextures(files, out, rules, prog){
           }
         }
         state.flipbooks.push(entry);
+        state.animationMappings.push({source:path, output:dest, frames:entry.frames || [...Array(frameCount).keys()], ticks_per_frame:entry.ticks_per_frame, item_like:/\/items\//i.test(path)});
         log(`🎞️ Animation detected: ${dest} (${frameCount} frames)`, 'info');
       }
       count++;
@@ -692,19 +693,19 @@ async function stageModels(files, out, rules, prog){
   const allModels = {};
   for(const [path, zipEntry] of files){
     assertAbort(); prog();
-    if(!path.startsWith('assets/minecraft/models/') || !path.endsWith('.json')) continue;
+    if(!/^assets\/[^/]+\/models\//i.test(path) || !path.endsWith('.json')) continue;
     try{
-      const key = path.replace('assets/minecraft/models/','').replace(/\.json$/,'');
+      const key = path.replace(/^assets\/[^/]+\/models\//i,'').replace(/\.json$/,'');
       allModels[key] = JSON.parse(await zipEntry.async('string'));
     }catch(e){ log(`⚠️ Unparseable model skipped: ${path}`, 'warn'); }
   }
   let count = 0, totalCubes = 0;
   for(const [path, zipEntry] of files){
     assertAbort(); prog();
-    if(!path.startsWith('assets/minecraft/models/') || !path.endsWith('.json')) continue;
-    const model = allModels[path.replace('assets/minecraft/models/','').replace(/\.json$/,'')];
+    if(!/^assets\/[^/]+\/models\//i.test(path) || !path.endsWith('.json')) continue;
+    const model = allModels[path.replace(/^assets\/[^/]+\/models\//i,'').replace(/\.json$/,'')];
     if(!model) continue;
-    const base = path.split('/').pop().replace('.json','');
+    const base = path.replace(/^assets\/[^/]+\/models\//i,'').replace(/\.json$/,'').replace(/[^a-zA-Z0-9_]+/g,'_');
     if(!model.elements && !model.parent){ continue; }
     const { geometry, converted } = javaModelToGeometry(model, base, rules, allModels);
     out.file(`models/entity/${base}.geometry.json`, JSON.stringify(geometry, null, 2));
@@ -714,6 +715,74 @@ async function stageModels(files, out, rules, prog){
   RUN.converted += count;
   log(`✔ Models (experimental): ${count} Java models → Bedrock geometry (${totalCubes} cubes, parent chains resolved)`, 'ok');
   return count;
+}
+
+function modelOutputName(path){
+  return path.replace(/^assets\/[^/]+\/models\//i,'').replace(/\.json$/i,'').replace(/[^a-zA-Z0-9_]+/g,'_');
+}
+function collectModelSelectors(node, result=[], inherited=[]){
+  if(node == null) return result;
+  if(typeof node === 'string'){
+    if(/^(?:(?:[a-z0-9_.-]+):)?(?:item\/)?[a-z0-9_.\/-]+$/i.test(node)) result.push({model:node, selectors:inherited});
+    return result;
+  }
+  if(Array.isArray(node)){ node.forEach(x=>collectModelSelectors(x,result,inherited)); return result; }
+  if(typeof node !== 'object') return result;
+  if(node.model) collectModelSelectors(node.model,result,inherited);
+  if(node.on_true) collectModelSelectors(node.on_true,result,inherited.concat([{type:'condition',value:true}]));
+  if(node.on_false) collectModelSelectors(node.on_false,result,inherited.concat([{type:'condition',value:false}]));
+  if(node.on_true || node.on_false){
+    for(const key of ['range_dispatch','select','property','thresholds']) if(node[key]) collectModelSelectors(node[key],result,inherited);
+  }
+  for(const key of ['cases','entries','models','fallback','default','children']) if(node[key]) collectModelSelectors(node[key],result,inherited);
+  return result;
+}
+async function stageCustomItems(files, out, prog){
+  const source = new Map(files.map(([p,e])=>[p,e]));
+  const mappings=[]; const emitted=new Set();
+  const addMapping = (item, modelPath, selectors, origin) => {
+    if(!modelPath) return;
+    let normalized=String(modelPath).replace(/^minecraft:/i,'');
+    if(normalized.startsWith('item/')) normalized='models/'+normalized;
+    if(!normalized.startsWith('models/')) normalized='models/item/'+normalized;
+    const javaPath='assets/minecraft/'+normalized+(normalized.endsWith('.json')?'':'.json');
+    const safeModel=modelOutputName(javaPath);
+    const geometry=`geometry.${safeModel}`;
+    const key=JSON.stringify([item,geometry,selectors]); if(emitted.has(key)) return; emitted.add(key);
+    mappings.push({java_item:item, model:normalized.replace(/^models\//,''), geometry, custom_model_data:selectors.filter(x=>x.type==='custom_model_data').map(x=>x.value), selectors, source:origin});
+  };
+  for(const [path, entry] of files){
+    assertAbort(); prog();
+    if(!/^assets\/[^/]+\/models\/item\/[^/]+\.json$/i.test(path)) continue;
+    try{
+      const j=JSON.parse(await entry.async('string')); const id=path.split('/').pop().replace(/\.json$/i,'');
+      addMapping(id,path.replace(/^assets\/[^/]+\//i,''),[],path);
+      for(const ov of j.overrides||[]){ const p=ov.predicate||{}; const selectors=Object.entries(p).map(([type,value])=>({type,value})); addMapping(id,ov.model,selectors,path); }
+    }catch(e){ log(`⚠️ Custom item model skipped: ${path}`,'warn'); }
+  }
+  for(const [path, entry] of files){
+    assertAbort(); prog();
+    if(!/^assets\/[^/]+\/items\/[^/]+\.json$/i.test(path)) continue;
+    try{
+      const j=JSON.parse(await entry.async('string')); const id=path.split('/').pop().replace(/\.json$/i,'');
+      for(const hit of collectModelSelectors(j.model||j)){ addMapping(id,hit.model,hit.selectors,path); }
+    }catch(e){ log(`⚠️ Modern item definition skipped: ${path}`,'warn'); }
+  }
+  const attachables=[];
+  for(const m of mappings){
+    if(m.custom_model_data.length===0 && attachables.some(x=>x.java_item===m.java_item)) continue;
+    const safe=m.geometry.replace(/[^a-zA-Z0-9_]/g,'_').toLowerCase();
+    const identifier=`packshift:${m.java_item}_${safe}`;
+    const attachable={format_version:'1.10.0',minecraft:{attachable:{description:{identifier,materials:{default:'entity_alphatest',enchanted:'entity_alphatest_glint'},textures:{default:`textures/items/${m.java_item}`,enchanted:'textures/misc/enchanted_item_glint'},geometry:{default:m.geometry},render_controllers:['controller.render.item_default']}}}};
+    const file=`attachables/${safe}.json`; if(!out.files[file]) out.file(file,JSON.stringify(attachable,null,2));
+    attachables.push({java_item:m.java_item,identifier,geometry:m.geometry,file,custom_model_data:m.custom_model_data,selectors:m.selectors,source:m.source});
+  }
+  if(mappings.length){
+    out.file('packshift_custom_items.json',JSON.stringify({format_version:2,generated_by:GENERATOR,warning:'These mappings describe the Java selector-to-Bedrock geometry relationship. Geyser/behavior-pack wiring may still be required.',items:mappings,attachables},null,2));
+    state.customMappings=mappings; RUN.converted+=mappings.length;
+    log(`✔ Custom 3D items: ${mappings.length} selector/model mappings + ${attachables.length} attachables emitted`,'ok');
+  }else log('· No custom item model definitions found','info');
+  return mappings.length;
 }
 
 async function stagePbr(files, out, prog){
@@ -1333,7 +1402,7 @@ async function convertPack(){
   const rules = getRules();
   const name = $('#packName').value.trim() || state.fileName.replace(/\.(zip|mcpack)$/i,'') || 'Converted Pack';
   logEl.innerHTML = '';
-  state.texDims = {}; state.flipbooks = [];
+  state.texDims = {}; state.flipbooks = []; state.animationMappings = []; state.customMappings = [];
   $('#progressWrap').classList.add('show');
   $('#downloadRow').style.display = 'none'; $('#cancelBtn').style.display='inline-flex'; $('#convertBtn').disabled=true;
   log(`▶ Starting conversion → Bedrock ${$('#targetVersion').value} (manifest v${rules.format_version}, engine ≥ ${rules.min_engine.join('.')})`, 'info');
@@ -1355,6 +1424,7 @@ async function convertPack(){
 
   await stageTextures(files, out, rules, prog);
   await stageModels(files, out, rules, prog);
+  await stageCustomItems(files, out, prog);
   if($('#pbrMode').value === 'bedrock') await stagePbr(files, out, prog);
   else log('· PBR/RTX companions preserved when present; no pixel conversion requested', 'info');
   await stageSounds(files, out, rules, prog);
@@ -1376,7 +1446,7 @@ async function convertPack(){
   out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
   log(`■ Report: ${summary}`, 'ok');
 
-  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.'] };
+  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, custom_model_mappings:state.customMappings, animation_mappings:state.animationMappings, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.','Custom item mappings and attachables may require Geyser or behavior-pack wiring to become selectable in Bedrock.'] };
   state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
   out.file('packshift_report.json', JSON.stringify(report,null,2));
   setProgress(99,'Compressing output…'); await sleep(20);
