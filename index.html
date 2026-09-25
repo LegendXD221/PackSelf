@@ -97,7 +97,8 @@ select:focus,input[type=text]:focus,textarea:focus{border-color:var(--accent);bo
 footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:.82rem;padding:28px 20px}
 .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--bg3);border:1px solid var(--accent);color:var(--text);padding:12px 22px;border-radius:12px;font-size:.88rem;z-index:200;transition:.3s;opacity:0}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-@media(max-width:640px){.controls{flex-direction:column;align-items:stretch}.btn{justify-content:center}}
+.analysis{margin-top:22px;display:none}.analysis.show{display:block;animation:fadeUp .35s ease}.analysis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-top:14px}.stat{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px}.stat b{display:block;font-size:1.3rem;color:var(--accent)}.stat span{display:block;color:var(--muted);font-size:.78rem}.status-panel{margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:14px;background:#0d131e;font-size:.86rem}.status-panel strong{color:var(--text)}.status-panel.warn{border-color:#8a6416}.status-panel.err{border-color:#8f3030}.notice{color:var(--muted);font-size:.8rem;margin-top:8px}.license-list{display:grid;gap:8px;margin-top:10px}.license-list a{font-size:.82rem}
+@media(max-width:640px){.controls{flex-direction:column;align-items:stretch}.btn{justify-content:center}.analysis-grid{grid-template-columns:repeat(2,1fr)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .dropzone:focus-visible,.btn:focus-visible,.faq-q:focus-visible,.navlink:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 </style>
@@ -144,16 +145,28 @@ footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);f
         <label for="targetVersion" id="targetVersionLabel">Target Bedrock version</label>
         <select id="targetVersion"></select>
       </div>
+      <div class="field">
+        <label for="pbrMode">PBR / RTX assets</label>
+        <select id="pbrMode"><option value="preserve" selected>Preserve and report</option><option value="bedrock">Generate Bedrock texture sets</option></select>
+      </div>
       <button class="btn" id="convertBtn" disabled>⚙️ Convert pack</button>
+      <button class="btn ghost" id="cancelBtn" style="display:none">⏹ Cancel</button>
       <button class="btn ghost" id="clearBtn" style="display:none">✖ Clear</button>
+    </div>
+
+    <div class="analysis card" id="analysisPanel" aria-live="polite">
+      <h3>Pack analysis</h3><p class="notice" id="analysisSummary">The archive will be scanned before conversion.</p>
+      <div class="analysis-grid" id="analysisGrid"></div>
+      <div class="status-panel" id="analysisWarnings"><strong>Diagnostics</strong><div id="analysisWarningText" class="notice">No analysis yet.</div></div>
     </div>
 
     <div class="progress-wrap" id="progressWrap">
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       <div class="progress-meta"><span id="progressLabel">Waiting…</span><span id="progressPct">0%</span></div>
       <div class="log" id="log"></div>
-      <div style="margin-top:16px;display:none" id="downloadRow">
+      <div style="margin-top:16px;display:none;gap:10px;flex-wrap:wrap" id="downloadRow">
         <button class="btn" id="downloadBtn"><span id="dlBtnText">⬇️ Download Bedrock pack (.mcpack)</span></button>
+        <button class="btn ghost" id="reportBtn">⬇️ Download conversion report</button>
       </div>
     </div>
 
@@ -192,7 +205,7 @@ footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);f
    in every converted pack (manifest.json metadata / pack.mcmeta). ▼▼▼ */
 const SITE_URL = 'https://packshift.devs.surf';
 const GENERATOR  = 'PackShift';
-const GENERATOR_VER = '1.4.1';
+const GENERATOR_VER = '1.4.0';
 
 /* ---------- 1. Utilities ---------- */
 const $ = s => document.querySelector(s);
@@ -222,26 +235,6 @@ function pngDims(blob){
     const img = new Image();
     img.onload = ()=>{ URL.revokeObjectURL(url); res({width:img.naturalWidth, height:img.naturalHeight}); };
     img.onerror = ()=>{ URL.revokeObjectURL(url); res(null); };
-    img.src = url;
-  });
-}
-/* Crop the top `size x size` frame out of a vertical filmstrip texture.
-   Bedrock's inventory GUI does not crop animated (flipbook) textures for
-   item icons — it draws the whole filmstrip squished into the icon square,
-   which is why a converted animated item (e.g. a glowing crystal) shows up
-   "spread"/stretched in the hotbar and inventory. Blocks are unaffected —
-   Bedrock's in-world block rendering crops flipbook frames correctly. */
-function cropTopSquare(blob, size){
-  return new Promise((res, rej)=>{
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = ()=>{
-      URL.revokeObjectURL(url);
-      const c = document.createElement('canvas'); c.width = size; c.height = size;
-      c.getContext('2d').drawImage(img, 0, 0, size, size, 0, 0, size, size);
-      c.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png');
-    };
-    img.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error('image decode failed')); };
     img.src = url;
   });
 }
@@ -505,8 +498,45 @@ const SOUND_EVENT_MAP = { // Java event -> Bedrock event
 };
 const SOUND_EVENT_MAP_REV = Object.fromEntries(Object.entries(SOUND_EVENT_MAP).map(([j,b])=>[b,j]));
 
-const state = { zip:null, fileName:'', outZip:null, texDims:{}, flipbooks:[] };
-let RUN = { converted:0, skipped:0, warnings:0, failed:0 }; // per-conversion report counters
+const LIMITS = { maxBytes: 512 * 1024 * 1024, maxEntries: 20000, maxEntryBytes: 256 * 1024 * 1024, maxTotalBytes: 1024 * 1024 * 1024, maxImageDimension: 16384 };
+let abortController = null;
+const state = { zip:null, fileName:'', outZip:null, reportBlob:null, texDims:{}, flipbooks:[], analysis:null };
+let RUN = { converted:0, skipped:0, warnings:0, failed:0, fixes:[] }; // per-conversion report counters
+function safeZipPath(raw){
+  const path = String(raw || '').replace(/\\/g,'/');
+  if(!path || path.includes('\0') || path.startsWith('/') || /^[A-Za-z]:/.test(path)) throw new Error('Unsafe absolute ZIP path');
+  const parts = path.split('/');
+  if(parts.some(x=>!x || x === '.' || x === '..')) throw new Error('Unsafe ZIP path traversal');
+  return parts.join('/');
+}
+function assertAbort(){ if(abortController?.signal.aborted) throw new DOMException('Conversion cancelled','AbortError'); }
+function bumpFix(text){ RUN.fixes.push(text); log(`🔧 ${text}`,'info'); }
+async function analyzePack(files){
+  const stats = { entries:files.length, namespaces:new Set(), textures:0, models:0, animations:0, fonts:0, sounds:0, unsupported:0, pbr:0, customModels:0, packFormat:'unknown', minecraftVersion:'unknown', warnings:[] };
+  for(const [path, entry] of files){
+    assertAbort(); const lower=path.toLowerCase(); const m=path.match(/^assets\/([^/]+)\//i); if(m) stats.namespaces.add(m[1]);
+    if(lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.tga')) stats.textures++;
+    if(lower.endsWith('/models/') || lower.includes('/models/')) stats.models++;
+    if(lower.endsWith('.png.mcmeta')) stats.animations++;
+    if(lower.includes('/font/') || lower.includes('/fonts/')) stats.fonts++;
+    if(lower.endsWith('.ogg') || lower.endsWith('.fsb')) stats.sounds++;
+    if(/(?:_n|_s|_mer|_normal|_height|_roughness|_metallic)\.(png|tga|jpg|jpeg)$/i.test(path)) stats.pbr++;
+    if(/custom_model_data|item_model|range_dispatch|select/i.test(lower)) stats.customModels++;
+    if(lower.endsWith('.json') || lower.endsWith('.mcmeta')){ try{ await entry.async('string').then(JSON.parse); }catch(e){ stats.warnings.push(`Malformed JSON: ${path}`); } }
+    if(/\.(mcfunction|vert|frag|glsl|class|exe|dll)$/i.test(path)) stats.unsupported++;
+    await sleep(0);
+  }
+  const meta=files.find(([p])=>p==='pack.mcmeta')?.[1];
+  if(meta){ try{ const j=JSON.parse(await meta.async('string')); stats.packFormat=j.pack?.pack_format ?? j.pack?.min_format ?? 'unknown'; stats.minecraftVersion=j.pack?.description ? 'declared in pack.mcmeta' : 'unknown'; }catch(e){} }
+  stats.namespaces=[...stats.namespaces].sort(); return stats;
+}
+function renderAnalysis(a){
+  if(!a) return; $('#analysisPanel').classList.add('show'); $('#analysisSummary').textContent=`${a.entries} files scanned · namespaces: ${a.namespaces.join(', ') || 'none detected'} · pack format: ${a.packFormat}`;
+  const items=[['Textures',a.textures],['Models',a.models],['Animations',a.animations],['Fonts',a.fonts],['Sounds',a.sounds],['PBR assets',a.pbr],['Custom-model signals',a.customModels],['Unsupported candidates',a.unsupported]];
+  $('#analysisGrid').innerHTML=items.map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');
+  $('#analysisWarningText').textContent=a.warnings.length ? a.warnings.slice(0,8).join(' · ') : 'No malformed JSON detected in the preflight scan.';
+  $('#analysisWarnings').className='status-panel'+(a.warnings.length?' warn':'');
+}
 
 /* ================================================================
    4a. Java → Bedrock stages
@@ -527,7 +557,7 @@ async function stageTextures(files, out, rules, prog){
   }
   // Pass 2 — copy textures, decode dims, build flipbook entries
   for(const [path, zipEntry] of files){
-    prog(); // progress per file (item 13)
+    assertAbort(); prog(); // progress per file (item 13)
     if(!/^assets\/[^/]+\/textures\//i.test(path) || !path.endsWith('.png')) continue;
     const dest = mapTexturePath(path);
     try{
@@ -540,29 +570,19 @@ async function stageTextures(files, out, rules, prog){
       const anim = animMeta[path];
       if(anim && dims && dims.height >= dims.width){
         const frameCount = Math.floor(dims.height / dims.width);
-        const isItemIcon = dest.startsWith('textures/items/');
-        if(isItemIcon && frameCount > 1){
-          try{
-            const frame0 = await cropTopSquare(data, dims.width);
-            out.file(dest, frame0); // overwrite the full filmstrip we just staged
-            state.texDims[dest] = { width: dims.width, height: dims.width };
-            log(`✂️ ${dest}: animated item texture cropped to its first frame (Bedrock inventory icons can't play flipbook animations — the full strip would render squished)`, 'warn');
-          }catch(e){ log(`⚠️ Could not crop animated item texture ${dest}: ${e.message}`, 'warn'); }
-        } else {
-          const entry = {
-            flipbook_texture: dest.replace(/\.png$/,''),
-            atlas_tile: dest.split('/').pop().replace('.png',''),
-            ticks_per_frame: anim.frametime ?? 1
-          };
-          if(Array.isArray(anim.frames) && anim.frames.length){
-            entry.frames = anim.frames.map(f => num(typeof f === 'object' ? f.index : f));
-            if(anim.frames.some(f => typeof f === 'object' && f.time)){
-              log(`· Per-frame timing in ${dest} approximated by frametime`, 'warn');
-            }
+        const entry = {
+          flipbook_texture: dest.replace(/\.png$/,''),
+          atlas_tile: dest.split('/').pop().replace('.png',''),
+          ticks_per_frame: anim.frametime ?? 1
+        };
+        if(Array.isArray(anim.frames) && anim.frames.length){
+          entry.frames = anim.frames.map(f => num(typeof f === 'object' ? f.index : f));
+          if(anim.frames.some(f => typeof f === 'object' && f.time)){
+            log(`· Per-frame timing in ${dest} approximated by frametime`, 'warn');
           }
-          state.flipbooks.push(entry);
-          log(`🎞️ Animation detected: ${dest} (${frameCount} frames)`, 'info');
         }
+        state.flipbooks.push(entry);
+        log(`🎞️ Animation detected: ${dest} (${frameCount} frames)`, 'info');
       }
       count++;
       if(count % 25 === 0) await sleep(0);
@@ -671,7 +691,7 @@ function javaModelToGeometry(modelJson, name, rules, allModels){
 async function stageModels(files, out, rules, prog){
   const allModels = {};
   for(const [path, zipEntry] of files){
-    prog();
+    assertAbort(); prog();
     if(!path.startsWith('assets/minecraft/models/') || !path.endsWith('.json')) continue;
     try{
       const key = path.replace('assets/minecraft/models/','').replace(/\.json$/,'');
@@ -680,7 +700,7 @@ async function stageModels(files, out, rules, prog){
   }
   let count = 0, totalCubes = 0;
   for(const [path, zipEntry] of files){
-    prog();
+    assertAbort(); prog();
     if(!path.startsWith('assets/minecraft/models/') || !path.endsWith('.json')) continue;
     const model = allModels[path.replace('assets/minecraft/models/','').replace(/\.json$/,'')];
     if(!model) continue;
@@ -696,10 +716,25 @@ async function stageModels(files, out, rules, prog){
   return count;
 }
 
+async function stagePbr(files, out, prog){
+  let copied=0, sets=0;
+  const companions = new Map();
+  for(const [path, entry] of files){ assertAbort(); prog(); if(!/\.(png|tga|jpg|jpeg)$/i.test(path)) continue; const m=path.match(/^(.*?)(?:_(n|s|mer|normal|height|roughness|metallic))\.(png|tga|jpg|jpeg)$/i); if(m){ const key=m[1], kind=m[2]; if(!companions.has(key)) companions.set(key,{}); companions.get(key)[kind]=[path,entry]; } }
+  for(const [key, group] of companions){
+    const base = mapTexturePath(key.replace(/^assets\/[^/]+\/textures\//i,'assets/minecraft/textures/')+'.png').replace(/\.png$/i,'');
+    const n=group.n||group.normal, s=group.s||group.mer;
+    if(n){ out.file(base+'_normal.png', await n[1].async('blob')); copied++; }
+    if(s){ out.file(base+'_mer.png', await s[1].async('blob')); copied++; }
+    if(n||s){ out.file('textures/texture_set/'+base.replace(/^textures\//,'').replace(/\//g,'_')+'.texture_set.json', JSON.stringify({format_version:'1.16.100',minecraft:{textureSet:{color:base.replace(/^textures\//,''), ...(n?{normal:'textures/texture_set/'+base.replace(/^textures\//,'')+'_normal'}:{}), ...(s?{metalness_emissive_roughness:'textures/texture_set/'+base.replace(/^textures\//,'')+'_mer'}:{})}}},null,2)); sets++; }
+  }
+  if(copied||sets) log(`✔ PBR/RTX: preserved ${copied} companion maps and generated ${sets} texture sets`,'ok');
+  else log('· No paired PBR/RTX maps detected','info');
+}
+
 async function stageSounds(files, out, rules, prog){
   let copied = 0; let soundsJson = null; const copiedPaths = [];
   for(const [path, zipEntry] of files){
-    prog(); // progress per file (item 13)
+    assertAbort(); prog(); // progress per file (item 13)
     if(path.endsWith('assets/minecraft/sounds.json')){
       try{ soundsJson = JSON.parse(await zipEntry.async('string')); }catch(e){}
       continue;
@@ -817,7 +852,7 @@ async function stageMisc(files, out, rules, prog, packName){
   /* Preserve/generate the pack icon. */
   const matches = [];
   for(const [path, zipEntry] of files){
-    prog();
+    assertAbort(); prog();
     if(/(^|\/)(pack\.png|pack_icon\.png)$/i.test(path)) matches.push([path, zipEntry]);
   }
   matches.sort((a,b)=>((/pack\.png$/i.test(a[0])?0:1)-(/pack\.png$/i.test(b[0])?0:1)));
@@ -1144,7 +1179,7 @@ async function convertBedrockToJava(){
   // 3. Textures (reverse remap to Java paths)
   let tex = 0;
   for(const [p,e] of files){
-    prog();
+    assertAbort(); prog();
     if(!p.startsWith('textures/') || !p.endsWith('.png')) continue;
     if(p.includes('terrain_texture') || p.includes('item_texture')) continue;
     out.file(mapTexturePathReverse(p), await e.async('blob')); tex++;
@@ -1155,7 +1190,7 @@ async function convertBedrockToJava(){
   // 4. flipbook_textures.json → .png.mcmeta animations
   let anims = 0;
   for(const [p,e] of files){
-    prog();
+    assertAbort(); prog();
     if(!p.endsWith('flipbook_textures.json')) continue;
     try{
       const fb = JSON.parse(await e.async('string'));
@@ -1172,7 +1207,7 @@ async function convertBedrockToJava(){
   // 5. Geometry → Java models (any .json under models/ containing minecraft:geometry)
   let models = 0, cubes = 0;
   for(const [p,e] of files){
-    prog();
+    assertAbort(); prog();
     if(!p.startsWith('models/') || !p.endsWith('.json')) continue;
     let geo = null;
     try{ geo = JSON.parse(await e.async('string')); }catch(err){ continue; }
@@ -1190,7 +1225,7 @@ async function convertBedrockToJava(){
   // 6. Sounds: copy .ogg + sound_definitions.json → sounds.json
   let snd = 0; const defs = {}; const unmappedEvents = new Set();
   for(const [p,e] of files){
-    prog();
+    assertAbort(); prog();
     if(p === 'sounds/sound_definitions.json'){
       try{
         const sd = JSON.parse(await e.async('string'));
@@ -1231,6 +1266,9 @@ async function convertBedrockToJava(){
   out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
   log(`■ Report: ${summary}`, 'ok');
 
+  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.'] };
+  state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
+  out.file('packshift_report.json', JSON.stringify(report,null,2));
   setProgress(99,'Compressing output…'); await sleep(20);
   state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' });
   setProgress(100, `Done — ${(state.outZip.size/1024/1024).toFixed(2)} MB ready`);
@@ -1289,14 +1327,15 @@ function setProgress(pct, label){
 }
 async function convertPack(){
   if(!state.zip) return;
-  RUN = { converted:0, skipped:0, warnings:0, failed:0 };
+  abortController = new AbortController();
+  RUN = { converted:0, skipped:0, warnings:0, failed:0, fixes:[] };
   if($('#direction').value === 'b2j') return convertBedrockToJava();
   const rules = getRules();
   const name = $('#packName').value.trim() || state.fileName.replace(/\.(zip|mcpack)$/i,'') || 'Converted Pack';
   logEl.innerHTML = '';
   state.texDims = {}; state.flipbooks = [];
   $('#progressWrap').classList.add('show');
-  $('#downloadRow').style.display = 'none';
+  $('#downloadRow').style.display = 'none'; $('#cancelBtn').style.display='inline-flex'; $('#convertBtn').disabled=true;
   log(`▶ Starting conversion → Bedrock ${$('#targetVersion').value} (manifest v${rules.format_version}, engine ≥ ${rules.min_engine.join('.')})`, 'info');
 
   const out = new JSZip();
@@ -1315,9 +1354,9 @@ async function convertPack(){
   }
 
   await stageTextures(files, out, rules, prog);
-  /* 3D Java model -> Bedrock geometry is intentionally disabled. PackShift
-     focuses on reliable 2D texture conversion. */
-  log('· 3D model conversion skipped (texture-only mode)', 'info');
+  await stageModels(files, out, rules, prog);
+  if($('#pbrMode').value === 'bedrock') await stagePbr(files, out, prog);
+  else log('· PBR/RTX companions preserved when present; no pixel conversion requested', 'info');
   await stageSounds(files, out, rules, prog);
   await stageMisc(files, out, rules, prog, name);
 
@@ -1337,12 +1376,15 @@ async function convertPack(){
   out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
   log(`■ Report: ${summary}`, 'ok');
 
+  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.'] };
+  state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
+  out.file('packshift_report.json', JSON.stringify(report,null,2));
   setProgress(99,'Compressing output…'); await sleep(20);
   state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' });
   setProgress(100, `Done — ${(state.outZip.size/1024/1024).toFixed(2)} MB ready`);
   $('#downloadRow').style.display = 'block';
   log(`■ Conversion complete. ${out.filter(()=>true).length} files in output pack.`, 'ok');
-  toast('Conversion complete!');
+  $('#cancelBtn').style.display='none'; $('#convertBtn').disabled=false; abortController=null; toast('Conversion complete!');
 }
 
 /* ================================================================
@@ -1387,34 +1429,38 @@ dropzone.addEventListener('drop', e=>{ const f = e.dataTransfer.files[0]; if(f) 
 fileInput.addEventListener('change', e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); });
 
 async function loadFile(file){
-  if(!/\.(zip|mcpack)$/i.test(file.name)){ toast('Please provide a .zip or .mcpack resource pack'); return; } // item 10
+  if(!/\.(zip|mcpack)$/i.test(file.name)){ toast('Please provide a .zip or .mcpack resource pack'); return; }
+  if(file.size > LIMITS.maxBytes){ toast('Pack is larger than the 512 MB safety limit'); return; }
   try{
     toast('Reading ZIP…');
-    state.zip = await JSZip.loadAsync(file);
-    state.fileName = file.name;
-    if(!$('#packName').value) $('#packName').value = file.name.replace(/\.(zip|mcpack)$/i,'');
-    // Auto-detect pack type: manifest.json → Bedrock, pack.mcmeta → Java
-    const keys = Object.keys(state.zip.files);
-    const looksBedrock = keys.some(k => k === 'manifest.json' || k.endsWith('/manifest.json'));
-    const looksJava    = keys.some(k => k === 'pack.mcmeta'  || k.endsWith('/pack.mcmeta'));
-    if(looksBedrock && !looksJava && !isB2J()){
-      $('#direction').value = 'b2j'; refreshVersionOptions(); updateDirectionUI();
-      toast('Bedrock pack detected — direction switched');
-    }else if(looksJava && !looksBedrock && isB2J()){
-      $('#direction').value = 'j2b'; refreshVersionOptions(); updateDirectionUI();
-      toast('Java pack detected — direction switched');
+    const zip = await JSZip.loadAsync(file, {checkCRC32:true});
+    const seen = new Set(), normalized = {};
+    let total=0;
+    for(const [raw, entry] of Object.entries(zip.files)){
+      const path=safeZipPath(raw); if(seen.has(path)) throw new Error(`Duplicate archive path after normalization: ${path}`); seen.add(path);
+      const size=Number(entry._data?.uncompressedSize || 0); total += size;
+      if(size > LIMITS.maxEntryBytes) throw new Error(`Archive entry exceeds the 256 MB per-file safety limit: ${path}`);
+      if(total > LIMITS.maxTotalBytes) throw new Error('Archive exceeds the 1 GB uncompressed safety limit');
+      normalized[path]=entry;
     }
-    $('#convertBtn').disabled = false;
-    $('#clearBtn').style.display = 'inline-flex';
-    log(`📦 Loaded "${file.name}" — ${Object.keys(state.zip.files).length} entries, ${(file.size/1024/1024).toFixed(2)} MB`, 'info');
-    $('#progressWrap').classList.add('show');
-    $('#downloadRow').style.display = 'none';
-    setProgress(0,'Ready to convert'); logEl.innerHTML='';
-  }catch(e){ toast('Could not read archive'); log('✖ '+e.message,'err'); }
+    if(seen.size > LIMITS.maxEntries) throw new Error('Archive contains too many entries');
+    state.zip = {files:normalized}; state.fileName = file.name;
+    if(!$('#packName').value) $('#packName').value = file.name.replace(/\.(zip|mcpack)$/i,'');
+    const keys = Object.keys(normalized);
+    const looksBedrock = keys.some(k=>k==='manifest.json'); const looksJava = keys.some(k=>k==='pack.mcmeta');
+    if(looksBedrock && !looksJava && !isB2J()){ $('#direction').value='b2j'; refreshVersionOptions(); updateDirectionUI(); toast('Bedrock pack detected — direction switched'); }
+    else if(looksJava && !looksBedrock && isB2J()){ $('#direction').value='j2b'; refreshVersionOptions(); updateDirectionUI(); toast('Java pack detected — direction switched'); }
+    $('#convertBtn').disabled=false; $('#clearBtn').style.display='inline-flex'; $('#analysisPanel').classList.remove('show');
+    log(`📦 Loaded "${file.name}" — ${seen.size} safe entries, ${(file.size/1024/1024).toFixed(2)} MB`,'info');
+    $('#progressWrap').classList.add('show'); $('#downloadRow').style.display='none'; setProgress(0,'Scanning pack…'); logEl.innerHTML='';
+    const files=Object.entries(state.zip.files).filter(([,e])=>!e.dir); state.analysis=await analyzePack(stripRootPrefix(files)); renderAnalysis(state.analysis); log(`✔ Preflight complete: ${state.analysis.warnings.length} JSON warnings`,'ok');
+  }catch(e){ state.zip=null; toast('Could not read or validate archive'); log('✖ '+e.message,'err'); }
 }
-$('#convertBtn').addEventListener('click', convertPack);
+$('#convertBtn').addEventListener('click', async ()=>{ try{ await convertPack(); }catch(e){ if(e.name==='AbortError') log('⏹ Conversion cancelled safely','warn'); else { log('✖ Conversion stopped: '+e.message,'err'); console.error(e); } $('#cancelBtn').style.display='none'; $('#convertBtn').disabled=false; abortController=null; } });
+$('#cancelBtn').addEventListener('click', ()=>{ if(abortController) abortController.abort(); });
+$('#reportBtn').addEventListener('click', ()=>{ if(state.reportBlob) saveAs(state.reportBlob, 'packshift_conversion_report.json'); });
 $('#clearBtn').addEventListener('click', ()=>{
-  state.zip = null; state.outZip = null; fileInput.value='';
+  if(abortController) abortController.abort(); state.zip = null; state.outZip = null; state.reportBlob=null; state.analysis=null; fileInput.value='';
   $('#convertBtn').disabled = true; $('#clearBtn').style.display='none';
   $('#progressWrap').classList.remove('show');
   updateDirectionUI();
@@ -1447,11 +1493,6 @@ const BLOG_POSTS = [
     id:'post3', title:'Changelog v1.4 — Minecraft 26.x support & polish', tags:['changelog','update'],
     date:'2026-09-24T18:00:00Z', image:'',
     body:`**v1.4 — ready for Minecraft's year-based versions**\n\nJava Edition now uses year-based numbers (26.1, 26.2, 26.3…), so PackShift has been updated to match.\n\n- ➕ **Java 26.1 and 26.2 targets** with the correct resource pack formats (84 and 88), written as \`min_format\` / \`max_format\`\n- 🏷️ Java 26.2 is now the default (latest) target for Bedrock → Java\n- ♿ Dropzone now works with the keyboard (Enter / Space) and the status log is announced to screen readers\n- 🎬 Animations respect your reduced-motion setting\n- 🔎 Better link previews and search snippets (description, Open Graph, icon)\n- ❓ New FAQ entries about version numbers and the "incompatible pack" warning\n\n> Java 26.3 will be added once its final resource pack format is confirmed.`
-  },
-  {
-    id:'post4', title:'Fix v1.4.1 — animated item icons no longer smear', tags:['fix'],
-    date:'2026-09-25T12:00:00Z', image:'',
-    body:`**v1.4.1 — small but important fix**\n\nAnimated *item* textures (e.g. a glowing crystal) were being converted to Bedrock by copying the whole vertical filmstrip straight into \`item_texture.json\`. Bedrock's inventory GUI doesn't crop flipbook frames for item icons the way it does for blocks — so the icon rendered as the entire strip squished into one square, looking stretched/smeared.\n\nPackShift now crops animated item textures down to their first frame before registering them as the icon, and skips the (non-functional) flipbook entry for items. Block and terrain animations are unaffected — those already animate correctly in Bedrock.`
   }
 ];
 function renderBlog(){
@@ -1481,6 +1522,8 @@ const FAQS = [
   ['Why are there Java versions like 26.1 and 26.2?','Since 2026, Minecraft Java Edition uses year-based version numbers: after 1.21.11 came 26.1, then 26.2. PackShift lists them next to the older 1.x releases and writes the matching resource pack format (26.1 is 84, 26.2 is 88).'],
   ['Minecraft says my converted pack is incompatible. Why?','Choose the Java version you actually play on. For 1.21.9 and newer, PackShift sets min_format to that version and leaves max_format open, so the pack should keep loading on later releases. If your version is not listed yet, pick the newest listed one.'],
   ['My pack has a root folder — will it work?','Yes. If every file sits inside one top-level folder, PackShift strips that prefix automatically before converting, in both directions.'],
+  ['What open-source references informed PackShift?','PackShift is a clean-room browser implementation informed by public format documentation and architecture ideas from GeyserMC PackConverter (MIT), GeyserConverter / java2bedrockclient (GPL-3.0), Phytlas (CC BY-NC-SA 3.0), JE2BE Resource Pack Converter (MIT), and EgoConverter++ (ENCL). No source code from those projects is bundled here. Their licenses and repository links should be reviewed before any future code reuse.'],
+  ['What does the security validation do?','The browser rejects oversized archives, excessive entry counts, absolute paths, path traversal, normalized duplicates, malformed JSON warnings, and unsupported executable-like files. Files are never executed; processing stays in memory and output paths are normalized.'],
 ];
 $('#faqList').innerHTML = FAQS.map((f,i)=>`
   <div class="faq-item" id="faq${i}">
