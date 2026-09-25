@@ -503,7 +503,7 @@ let abortController = null;
 const state = { zip:null, fileName:'', outZip:null, reportBlob:null, texDims:{}, flipbooks:[], analysis:null };
 let RUN = { converted:0, skipped:0, warnings:0, failed:0, fixes:[] }; // per-conversion report counters
 function safeZipPath(raw){
-  const path = String(raw || '').replace(/\\/g,'/');
+  const path = String(raw || '').replace(/\\/g,'/').replace(/\/+$/,'');
   if(!path || path.includes('\0') || path.startsWith('/') || /^[A-Za-z]:/.test(path)) throw new Error('Unsafe absolute ZIP path');
   const parts = path.split('/');
   if(parts.some(x=>!x || x === '.' || x === '..')) throw new Error('Unsafe ZIP path traversal');
