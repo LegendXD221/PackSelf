@@ -1626,6 +1626,11 @@ const BLOG_POSTS = [
     id:'post3', title:'Changelog v1.4 — Minecraft 26.x support & polish', tags:['changelog','update'],
     date:'2026-09-24T18:00:00Z', image:'',
     body:`**v1.4 — ready for Minecraft's year-based versions**\n\nJava Edition now uses year-based numbers (26.1, 26.2, 26.3…), so PackShift has been updated to match.\n\n- ➕ **Java 26.1 and 26.2 targets** with the correct resource pack formats (84 and 88), written as \`min_format\` / \`max_format\`\n- 🏷️ Java 26.2 is now the default (latest) target for Bedrock → Java\n- ♿ Dropzone now works with the keyboard (Enter / Space) and the status log is announced to screen readers\n- 🎬 Animations respect your reduced-motion setting\n- 🔎 Better link previews and search snippets (description, Open Graph, icon)\n- ❓ New FAQ entries about version numbers and the "incompatible pack" warning\n\n> Java 26.3 will be added once its final resource pack format is confirmed.`
+  },
+  {
+    id:'post4', title:'PackShift v1.5 — verified output & a clearer conversion run', tags:['changelog','release'],
+    date:'2026-10-01T18:00:00+05:30', image:'',
+    body:`**v1.5 — reliability and recovery update**\n\nPackShift now gives you more information before and after a conversion, while keeping resource packs local to your browser.\n\n- ✓ Preflight identifies Java, Bedrock, mixed, and unrecognized archives\n- ✓ Generated ZIPs are reopened and checked for unsafe paths, duplicate files, malformed JSON, missing metadata, and empty output files\n- ✓ New conversion dashboard shows progress, processing health, memory awareness, and final verification\n- ✓ Strict validation can stop a conversion when generated output contains serious errors\n- ✓ Conversion settings persist locally without storing uploaded pack contents\n- ✓ Improved keyboard navigation, focus states, mobile layout, and accessible FAQ controls\n- ✓ Report generation can be enabled or disabled from Conversion settings\n\n> Conversion remains best-effort: differences between Java and Bedrock formats are reported rather than hidden.`
   }
 ];
 function renderBlog(){
