@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Free, private Java to Bedrock (and Bedrock to Java) Minecraft resource pack converter. Runs 100% in your browser. Supports Java 26.x and Bedrock 1.26.">
 <meta name="theme-color" content="#0b0e14">
+<meta name="color-scheme" content="dark">
+<meta property="og:url" content="https://packshift.devs.surf">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="PackShift — Java ↔ Bedrock Resource Pack Converter">
+<meta name="twitter:description" content="Convert resource packs locally in your browser. No uploads.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="PackShift — Java ↔ Bedrock Resource Pack Converter">
 <meta property="og:description" content="Convert Minecraft resource packs between Java and Bedrock entirely in your browser. No uploads.">
@@ -25,7 +30,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6;overflow-x:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6;overflow-x:hidden;-webkit-tap-highlight-color:rgba(34,197,94,.18)}
 a{color:var(--blue);text-decoration:none}
 ::selection{background:rgba(34,197,94,.35)}
 header{position:fixed;top:0;left:0;right:0;z-index:100;backdrop-filter:blur(14px);background:rgba(11,14,20,.78);border-bottom:1px solid var(--border)}
@@ -100,10 +105,16 @@ footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);f
 .analysis{margin-top:22px;display:none}.analysis.show{display:block;animation:fadeUp .35s ease}.analysis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-top:14px}.stat{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px}.stat b{display:block;font-size:1.3rem;color:var(--accent)}.stat span{display:block;color:var(--muted);font-size:.78rem}.status-panel{margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:14px;background:#0d131e;font-size:.86rem}.status-panel strong{color:var(--text)}.status-panel.warn{border-color:#8a6416}.status-panel.err{border-color:#8f3030}.notice{color:var(--muted);font-size:.8rem;margin-top:8px}.license-list{display:grid;gap:8px;margin-top:10px}.license-list a{font-size:.82rem}
 @media(max-width:640px){.controls{flex-direction:column;align-items:stretch}.btn{justify-content:center}.analysis-grid{grid-template-columns:repeat(2,1fr)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
-.dropzone:focus-visible,.btn:focus-visible,.faq-q:focus-visible,.navlink:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.dropzone:focus-visible,.btn:focus-visible,.faq-q:focus-visible,.navlink:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.skip-link{position:fixed;left:16px;top:8px;z-index:300;transform:translateY(-160%);background:var(--accent);color:#04120a;padding:9px 14px;border-radius:8px;font-weight:800;transition:transform .2s ease}.skip-link:focus{transform:translateY(0)}
+.pack-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;color:var(--muted);font-size:.82rem}.pack-meta span{border:1px solid var(--border);background:var(--bg3);border-radius:8px;padding:5px 9px}.pack-meta .good{color:var(--accent);border-color:rgba(34,197,94,.35)}.pack-meta .warn{color:#fbbf24;border-color:rgba(251,191,36,.35)}
+.settings{margin-top:18px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 16px}.settings summary{cursor:pointer;color:var(--text);font-weight:700}.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px}.check{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.84rem}.check input{accent-color:var(--accent);width:16px;height:16px}.dashboard{display:none;margin-top:18px;grid-template-columns:1.3fr .7fr;gap:14px}.dashboard.show{display:grid}.dashboard-card{background:#0d131e;border:1px solid var(--border);border-radius:12px;padding:16px}.dashboard-title{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em}.dashboard-value{font-variant-numeric:tabular-nums;font-size:1.35rem;font-weight:800;color:var(--text);margin-top:5px}.stage-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.stage{font-size:.74rem;padding:5px 8px;border-radius:6px;background:var(--bg3);color:var(--muted)}.stage.done{color:var(--accent);border:1px solid rgba(34,197,94,.3)}.stage.active{color:var(--blue);border:1px solid rgba(56,189,248,.35)}.verification{margin-top:14px;padding:12px 14px;border-radius:10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);color:var(--accent);font-size:.88rem}.verification.warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.35);color:#fbbf24}@media(max-width:720px){.dashboard.show{grid-template-columns:1fr}.dropzone{padding:38px 16px}.settings-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.settings-grid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.skip-link{transition:none}}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#converter">Skip to converter</a>
 <noscript><p style="padding:90px 24px 0;text-align:center">PackShift needs JavaScript to convert packs in your browser.</p></noscript>
 
 <header>
@@ -115,19 +126,21 @@ footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);f
   </nav>
 </header>
 
-<main>
+<main id="main-content">
   <section id="converter">
     <div class="hero">
       <div class="badge" id="heroBadge">100% client-side · Java 26.2 → Bedrock 1.26.40</div>
       <h1 id="heroTitle">Convert <span class="grad-text">Java Edition</span> resource packs<br>to <span class="grad-text">Bedrock Edition</span></h1>
-      <p class="sub">Drop a resource pack ZIP and convert in either direction — Java ↔ Bedrock. Textures, animations, effects, sounds and particles are converted in your browser. 3D model conversion is intentionally skipped.</p>
+      <p class="sub">Drop a resource pack ZIP and convert in either direction — Java ↔ Bedrock. Textures, animations, effects, sounds and particles are converted in your browser. Model conversion is experimental and reported clearly.</p>
     </div>
 
-    <div class="dropzone" id="dropzone">
+    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-describedby="dzText" aria-label="Choose a resource pack file to convert">
       <div class="icon">📦</div>
       <p id="dzText"><span class="pick">Click to choose</span> or drag &amp; drop your Java resource pack (.zip / .mcpack)<br><small>Textures · Animations · Effects · Sounds · Particles</small></p>
       <input type="file" id="fileInput" accept=".zip,.mcpack">
     </div>
+
+    <div class="pack-meta" id="packMeta" aria-live="polite"><span>No pack selected</span><span>Files stay on this device</span></div>
 
     <div class="controls">
       <div class="field">
@@ -154,11 +167,20 @@ footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);f
       <button class="btn ghost" id="clearBtn" style="display:none">✖ Clear</button>
     </div>
 
+    <details class="settings" id="settingsPanel"><summary>Conversion settings</summary><div class="settings-grid">
+      <label class="check"><input type="checkbox" id="preserveUnknown" checked> Preserve unknown files</label>
+      <label class="check"><input type="checkbox" id="generateReport" checked> Generate reports</label>
+      <label class="check"><input type="checkbox" id="strictValidation"> Strict validation</label>
+      <label class="check"><input type="checkbox" id="performanceMode" checked> Responsive processing</label>
+    </div></details>
+
     <div class="analysis card" id="analysisPanel" aria-live="polite">
       <h3>Pack analysis</h3><p class="notice" id="analysisSummary">The archive will be scanned before conversion.</p>
       <div class="analysis-grid" id="analysisGrid"></div>
       <div class="status-panel" id="analysisWarnings"><strong>Diagnostics</strong><div id="analysisWarningText" class="notice">No analysis yet.</div></div>
     </div>
+
+    <div class="dashboard" id="dashboard" aria-live="polite"><div class="dashboard-card"><div class="dashboard-title"><span>Current stage</span><span id="dashPct">0%</span></div><div class="dashboard-value" id="dashStage">Waiting for a pack</div><div class="notice" id="dashFile">Choose a .zip or .mcpack to begin.</div><div class="stage-list" id="stageList"><span class="stage active">Analyze</span><span class="stage">Plan</span><span class="stage">Textures</span><span class="stage">Animations</span><span class="stage">Models</span><span class="stage">Sounds</span><span class="stage">Validate</span><span class="stage">Package</span></div></div><div class="dashboard-card"><div class="dashboard-title"><span>Run health</span></div><div class="dashboard-value" id="dashStats">0 processed</div><div class="notice" id="dashMemory">Memory: monitoring</div><div class="verification" id="verification" hidden>Output verification pending.</div></div></div>
 
     <div class="progress-wrap" id="progressWrap">
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
@@ -172,7 +194,7 @@ footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);f
 
     <div class="grid">
       <div class="feature"><div class="fi">🖼️</div><h3>Texture remapping</h3><p>Block, item, particle, font, entity &amp; effect textures renamed to Bedrock conventions, with a 100+ known-name mapping table.</p></div>
-      <div class="feature"><div class="fi">🧊</div><h3>Texture-focused conversion</h3><p>2D textures are converted and remapped to Bedrock conventions. Java 3D model → Bedrock geometry conversion is intentionally skipped.</p></div>
+      <div class="feature"><div class="fi">🧊</div><h3>Texture-focused conversion</h3><p>2D textures are remapped to Bedrock conventions. Java model → Bedrock geometry conversion is experimental and included when it can be represented safely.</p></div>
       <div class="feature"><div class="fi">🎞️</div><h3>Animations</h3><p>Java <code>.mcmeta</code> animation definitions (fire, lava, water, prismarine…) become Bedrock <code>flipbook_textures.json</code>.</p></div>
       <div class="feature"><div class="fi">📜</div><h3>Branded manifest</h3><p>Valid manifest.json / pack.mcmeta with version-aware rules, and a PackShift watermark in the pack metadata.</p></div>
     </div>
@@ -205,11 +227,19 @@ footer{border-top:1px solid var(--border);text-align:center;color:var(--muted);f
    in every converted pack (manifest.json metadata / pack.mcmeta). ▼▼▼ */
 const SITE_URL = 'https://packshift.devs.surf';
 const GENERATOR  = 'PackShift';
-const GENERATOR_VER = '1.4.0';
+const GENERATOR_VER = '1.5.0';
 
 /* ---------- 1. Utilities ---------- */
 const $ = s => document.querySelector(s);
 const logEl = $('#log');
+const SETTINGS_KEY = 'packshift.settings.v1';
+const defaultSettings = { preserveUnknown:true, generateReport:true, strictValidation:false, performanceMode:true };
+let settings = {...defaultSettings};
+try { settings = {...defaultSettings, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'))}; } catch (_) {}
+function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (_) {} }
+function initSettings(){ for(const key of Object.keys(defaultSettings)){ const el = $('#'+key); if(!el) continue; el.checked = !!settings[key]; el.addEventListener('change', ()=>{ settings[key]=el.checked; saveSettings(); }); } }
+function setPackMeta(items){ const el=$('#packMeta'); if(!el) return; el.replaceChildren(...items.map(item=>{ const span=document.createElement('span'); span.textContent=item.text; if(item.kind) span.className=item.kind; return span; })); }
+function updateDashboard(pct, stage, file=''){ const d=$('#dashboard'); if(!d) return; d.classList.add('show'); $('#dashPct').textContent=Math.round(pct)+'%'; $('#dashStage').textContent=stage; $('#dashFile').textContent=file || 'Processing locally…'; $('#dashStats').textContent=`${RUN.converted + RUN.skipped + RUN.failed} processed · ${RUN.warnings} warnings`; $('#dashMemory').textContent=`Memory: ${state.zip?.files ? (Object.keys(state.zip.files).length > 4000 ? 'elevated' : 'reasonable') : 'monitoring'}`; }
 function log(msg, cls='info'){
   if(cls==='warn') RUN.warnings++;
   if(cls==='err')  RUN.failed++;
@@ -228,6 +258,7 @@ function uuid(){
   });
 }
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const yieldToBrowser = () => settings.performanceMode ? sleep(0) : Promise.resolve();
 const num = v => Number.isFinite(+v) ? +v : 0;          // NaN/null guard — never write NaN into output JSON
 function pngDims(blob){
   return new Promise(res=>{
@@ -512,7 +543,7 @@ function safeZipPath(raw){
 function assertAbort(){ if(abortController?.signal.aborted) throw new DOMException('Conversion cancelled','AbortError'); }
 function bumpFix(text){ RUN.fixes.push(text); log(`🔧 ${text}`,'info'); }
 async function analyzePack(files){
-  const stats = { entries:files.length, namespaces:new Set(), textures:0, models:0, animations:0, fonts:0, sounds:0, unsupported:0, pbr:0, customModels:0, packFormat:'unknown', minecraftVersion:'unknown', warnings:[] };
+  const stats = { entries:files.length, packType:detectPackType(files), namespaces:new Set(), textures:0, models:0, animations:0, fonts:0, sounds:0, unsupported:0, pbr:0, customModels:0, packFormat:'unknown', minecraftVersion:'unknown', warnings:[] };
   for(const [path, entry] of files){
     assertAbort(); const lower=path.toLowerCase(); const m=path.match(/^assets\/([^/]+)\//i); if(m) stats.namespaces.add(m[1]);
     if(lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.tga')) stats.textures++;
@@ -530,8 +561,35 @@ async function analyzePack(files){
   if(meta){ try{ const j=JSON.parse(await meta.async('string')); stats.packFormat=j.pack?.pack_format ?? j.pack?.min_format ?? 'unknown'; stats.minecraftVersion=j.pack?.description ? 'declared in pack.mcmeta' : 'unknown'; }catch(e){} }
   stats.namespaces=[...stats.namespaces].sort(); return stats;
 }
+function detectPackType(files){
+  const keys = files.map(([p])=>p.toLowerCase());
+  const java = keys.includes('pack.mcmeta') || keys.some(p=>p.startsWith('assets/'));
+  const bedrock = keys.includes('manifest.json') || keys.some(p=>p.startsWith('textures/'));
+  if(java && bedrock) return {label:'Mixed or ambiguous pack', kind:'warn'};
+  if(java) return {label:'Java resource pack', kind:'good'};
+  if(bedrock) return {label:'Bedrock resource pack', kind:'good'};
+  return {label:'Unrecognized archive', kind:'warn'};
+}
+async function verifyOutputZip(blob, direction){
+  const result = {ok:true, errors:[], warnings:[], entries:0, json:0};
+  try{
+    const zip = await JSZip.loadAsync(blob, {checkCRC32:true});
+    const seen = new Set();
+    for(const [raw, entry] of Object.entries(zip.files)){
+      result.entries++;
+      try { const path=safeZipPath(raw); if(seen.has(path)) result.errors.push(`Duplicate output path: ${path}`); seen.add(path); } catch(e){ result.errors.push(e.message); continue; }
+      if(!entry.dir){ const data=await entry.async('uint8array'); if(!data.length) result.warnings.push(`Empty output file: ${raw}`); if(/\.(json|mcmeta)$/i.test(raw)){ try{ JSON.parse(new TextDecoder().decode(data)); result.json++; }catch(_){ result.errors.push(`Invalid generated JSON: ${raw}`); } } }
+    }
+    const required = direction === 'b2j' ? 'pack.mcmeta' : 'manifest.json';
+    if(!seen.has(required)) result.errors.push(`Missing required ${required}`);
+  }catch(e){ result.errors.push(`Output ZIP could not be reopened: ${e.message}`); }
+  result.ok = result.errors.length === 0;
+  return result;
+}
+function renderVerification(result){ const el=$('#verification'); if(!el) return; el.hidden=false; el.className='verification'+(result.ok?'':' warn'); el.textContent=result.ok ? `Conversion verified · ${result.entries} output files · ${result.json} JSON files checked` : `Conversion completed with warnings · ${result.errors.length} verification errors`; }
+
 function renderAnalysis(a){
-  if(!a) return; $('#analysisPanel').classList.add('show'); $('#analysisSummary').textContent=`${a.entries} files scanned · namespaces: ${a.namespaces.join(', ') || 'none detected'} · pack format: ${a.packFormat}`;
+  if(!a) return; $('#analysisPanel').classList.add('show'); $('#analysisSummary').textContent=`${a.entries} files scanned · ${a.packType.label} · namespaces: ${a.namespaces.join(', ') || 'none detected'} · pack format: ${a.packFormat}`;
   const items=[['Textures',a.textures],['Models',a.models],['Animations',a.animations],['Fonts',a.fonts],['Sounds',a.sounds],['PBR assets',a.pbr],['Custom-model signals',a.customModels],['Unsupported candidates',a.unsupported]];
   $('#analysisGrid').innerHTML=items.map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');
   $('#analysisWarningText').textContent=a.warnings.length ? a.warnings.slice(0,8).join(' · ') : 'No malformed JSON detected in the preflight scan.';
@@ -586,7 +644,7 @@ async function stageTextures(files, out, rules, prog){
         log(`🎞️ Animation detected: ${dest} (${frameCount} frames)`, 'info');
       }
       count++;
-      if(count % 25 === 0) await sleep(0);
+      if(count % 25 === 0) await yieldToBrowser();
     }catch(e){ log(`✖ Failed: ${path} — ${e.message}`, 'err'); } // counted once, as "failed"
   }
   if(state.flipbooks.length){
@@ -1252,7 +1310,7 @@ async function convertBedrockToJava(){
     if(!p.startsWith('textures/') || !p.endsWith('.png')) continue;
     if(p.includes('terrain_texture') || p.includes('item_texture')) continue;
     out.file(mapTexturePathReverse(p), await e.async('blob')); tex++;
-    if(tex % 25 === 0) await sleep(0);
+    if(tex % 25 === 0) await yieldToBrowser();
   }
   RUN.converted += tex; log(`✔ Textures: ${tex} converted (Bedrock → Java paths)`,'ok');
 
@@ -1317,7 +1375,7 @@ async function convertBedrockToJava(){
     }
     if(p.startsWith('sounds/') && /\.ogg$/i.test(p)){
       out.file('assets/minecraft/' + p, await e.async('blob')); snd++;
-      if(snd % 10 === 0) await sleep(0);
+      if(snd % 10 === 0) await yieldToBrowser();
     }
   }
   if(unmappedEvents.size) log(`⚠️ ${unmappedEvents.size} unmapped sound events kept as-is (e.g. "${[...unmappedEvents][0]}")`, 'warn');
@@ -1332,18 +1390,20 @@ async function convertBedrockToJava(){
     return;
   }
   const summary = `${RUN.converted} converted · ${RUN.skipped} skipped · ${RUN.warnings} warnings · ${RUN.failed} failed`;
-  out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
-  log(`■ Report: ${summary}`, 'ok');
+  if(settings.generateReport) out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
+  log(settings.generateReport ? `■ Report: ${summary}` : `■ Conversion summary: ${summary}`, 'ok');
 
   const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.'] };
-  state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
-  out.file('packshift_report.json', JSON.stringify(report,null,2));
+  if(settings.generateReport){ state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); out.file('packshift_report.json', JSON.stringify(report,null,2)); }
   setProgress(99,'Compressing output…'); await sleep(20);
   state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' });
+  const verification = await verifyOutputZip(state.outZip, 'b2j'); renderVerification(verification); report.verification = verification;
+  if(!verification.ok && settings.strictValidation) throw new Error('Strict validation rejected the generated Java pack');
+  if(settings.generateReport){ out.file('packshift_report.json', JSON.stringify(report,null,2)); state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' }); }
   setProgress(100, `Done — ${(state.outZip.size/1024/1024).toFixed(2)} MB ready`);
   $('#downloadRow').style.display = 'block';
   log(`■ Conversion complete. ${out.filter(()=>true).length} files in output pack.`, 'ok');
-  toast('Conversion complete!');
+  toast('Conversion complete');
 }
 
 /* ================================================================
@@ -1393,6 +1453,7 @@ function setProgress(pct, label){
   $('#progressFill').style.width = pct + '%';
   $('#progressPct').textContent = Math.round(pct) + '%';
   if(label) $('#progressLabel').textContent = label;
+  updateDashboard(pct, label || 'Processing…');
 }
 async function convertPack(){
   if(!state.zip) return;
@@ -1443,18 +1504,20 @@ async function convertPack(){
     return;
   }
   const summary = `${RUN.converted} converted · ${RUN.skipped} skipped · ${RUN.warnings} warnings · ${RUN.failed} failed`;
-  out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
-  log(`■ Report: ${summary}`, 'ok');
+  if(settings.generateReport) out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
+  log(settings.generateReport ? `■ Report: ${summary}` : `■ Conversion summary: ${summary}`, 'ok');
 
   const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, custom_model_mappings:state.customMappings, animation_mappings:state.animationMappings, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.','Custom item mappings and attachables may require Geyser or behavior-pack wiring to become selectable in Bedrock.'] };
-  state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
-  out.file('packshift_report.json', JSON.stringify(report,null,2));
+  if(settings.generateReport){ state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); out.file('packshift_report.json', JSON.stringify(report,null,2)); }
   setProgress(99,'Compressing output…'); await sleep(20);
   state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' });
+  const verification = await verifyOutputZip(state.outZip, 'j2b'); renderVerification(verification); report.verification = verification;
+  if(!verification.ok && settings.strictValidation) throw new Error('Strict validation rejected the generated Bedrock pack');
+  if(settings.generateReport){ out.file('packshift_report.json', JSON.stringify(report,null,2)); state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' }); }
   setProgress(100, `Done — ${(state.outZip.size/1024/1024).toFixed(2)} MB ready`);
   $('#downloadRow').style.display = 'block';
   log(`■ Conversion complete. ${out.filter(()=>true).length} files in output pack.`, 'ok');
-  $('#cancelBtn').style.display='none'; $('#convertBtn').disabled=false; abortController=null; toast('Conversion complete!');
+  $('#cancelBtn').style.display='none'; $('#convertBtn').disabled=false; abortController=null; toast('Conversion complete');
 }
 
 /* ================================================================
@@ -1514,7 +1577,7 @@ async function loadFile(file){
       normalized[path]=entry;
     }
     if(seen.size > LIMITS.maxEntries) throw new Error('Archive contains too many entries');
-    state.zip = {files:normalized}; state.fileName = file.name;
+    state.zip = {files:normalized}; state.outZip=null; state.reportBlob=null; state.fileName = file.name;
     if(!$('#packName').value) $('#packName').value = file.name.replace(/\.(zip|mcpack)$/i,'');
     const keys = Object.keys(normalized);
     const looksBedrock = keys.some(k=>k==='manifest.json'); const looksJava = keys.some(k=>k==='pack.mcmeta');
@@ -1523,7 +1586,7 @@ async function loadFile(file){
     $('#convertBtn').disabled=false; $('#clearBtn').style.display='inline-flex'; $('#analysisPanel').classList.remove('show');
     log(`📦 Loaded "${file.name}" — ${seen.size} safe entries, ${(file.size/1024/1024).toFixed(2)} MB`,'info');
     $('#progressWrap').classList.add('show'); $('#downloadRow').style.display='none'; setProgress(0,'Scanning pack…'); logEl.innerHTML='';
-    const files=Object.entries(state.zip.files).filter(([,e])=>!e.dir); state.analysis=await analyzePack(stripRootPrefix(files)); renderAnalysis(state.analysis); log(`✔ Preflight complete: ${state.analysis.warnings.length} JSON warnings`,'ok');
+    const files=Object.entries(state.zip.files).filter(([,e])=>!e.dir); const normalizedFiles=stripRootPrefix(files); state.analysis=await analyzePack(normalizedFiles); renderAnalysis(state.analysis); const detected=state.analysis.packType; setPackMeta([{text:file.name},{text:`${(file.size/1024/1024).toFixed(2)} MB`},{text:detected.label,kind:detected.kind},{text:`${state.analysis.entries} entries`},{text:'Processed locally',kind:'good'}]); log(`✔ Preflight complete: ${state.analysis.warnings.length} JSON warnings`,'ok');
   }catch(e){ state.zip=null; toast('Could not read or validate archive'); log('✖ '+e.message,'err'); }
 }
 $('#convertBtn').addEventListener('click', async ()=>{ try{ await convertPack(); }catch(e){ if(e.name==='AbortError') log('⏹ Conversion cancelled safely','warn'); else { log('✖ Conversion stopped: '+e.message,'err'); console.error(e); } $('#cancelBtn').style.display='none'; $('#convertBtn').disabled=false; abortController=null; } });
@@ -1597,13 +1660,14 @@ const FAQS = [
 ];
 $('#faqList').innerHTML = FAQS.map((f,i)=>`
   <div class="faq-item" id="faq${i}">
-    <button class="faq-q" onclick="toggleFaq(${i})">${f[0]}<span class="chev">▾</span></button>
-    <div class="faq-a"><div class="inner">${f[1]}</div></div>
+    <button class="faq-q" type="button" aria-expanded="false" aria-controls="faq-answer-${i}" data-faq="${i}">${f[0]}<span class="chev" aria-hidden="true">▾</span></button>
+    <div class="faq-a" id="faq-answer-${i}"><div class="inner">${f[1]}</div></div>
   </div>`).join('');
+document.querySelectorAll('[data-faq]').forEach(btn=>btn.addEventListener('click',()=>window.toggleFaq(Number(btn.dataset.faq))));
 window.toggleFaq = i =>{
-  const item = $('#faq'+i), ans = item.querySelector('.faq-a'), open = item.classList.contains('open');
-  document.querySelectorAll('.faq-item.open').forEach(el=>{ el.classList.remove('open'); el.querySelector('.faq-a').style.maxHeight = '0'; });
-  if(!open){ item.classList.add('open'); ans.style.maxHeight = ans.scrollHeight + 'px'; }
+  const item = $('#faq'+i), ans = item.querySelector('.faq-a'), button=item.querySelector('.faq-q'), open = item.classList.contains('open');
+  document.querySelectorAll('.faq-item.open').forEach(el=>{ el.classList.remove('open'); el.querySelector('.faq-a').style.maxHeight = '0'; el.querySelector('.faq-q').setAttribute('aria-expanded','false'); });
+  if(!open){ item.classList.add('open'); button.setAttribute('aria-expanded','true'); ans.style.maxHeight = ans.scrollHeight + 'px'; } else { button.setAttribute('aria-expanded','false'); }
 };
 
 const sections = ['converter','blog','faq'];
@@ -1613,6 +1677,7 @@ window.addEventListener('scroll', ()=>{
   document.querySelectorAll('.navlink').forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+cur));
 });
 
+initSettings();
 renderBlog();
 
 /* a11y: keyboard-operable dropzone + live status log */
