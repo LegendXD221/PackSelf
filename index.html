@@ -260,14 +260,17 @@ function uuid(){
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 const yieldToBrowser = () => settings.performanceMode ? sleep(0) : Promise.resolve();
 const num = v => Number.isFinite(+v) ? +v : 0;          // NaN/null guard — never write NaN into output JSON
-function pngDims(blob){
-  return new Promise(res=>{
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = ()=>{ URL.revokeObjectURL(url); res({width:img.naturalWidth, height:img.naturalHeight}); };
-    img.onerror = ()=>{ URL.revokeObjectURL(url); res(null); };
-    img.src = url;
-  });
+async function pngDims(blob){
+  // Read the PNG IHDR instead of decoding each texture into an Image. This avoids
+  // layout-thread work and temporary object URLs for large packs.
+  try{
+    const head = new Uint8Array(await blob.slice(0,24).arrayBuffer());
+    if(head.length < 24 || head[0]!==0x89 || head[1]!==0x50 || head[2]!==0x4e || head[3]!==0x47) return null;
+    const view = new DataView(head.buffer, head.byteOffset, head.byteLength);
+    const width=view.getUint32(16), height=view.getUint32(20);
+    if(!width || !height || width > LIMITS.maxImageDimension || height > LIMITS.maxImageDimension) return null;
+    return {width, height};
+  }catch(_){ return null; }
 }
 /* Java pack.mcmeta descriptions can be a string OR a chat-component object/array.
    Bedrock manifest fields must be plain strings — coerce defensively. */
@@ -573,12 +576,20 @@ function detectPackType(files){
 async function verifyOutputZip(blob, direction){
   const result = {ok:true, errors:[], warnings:[], entries:0, json:0};
   try{
+    // Reopen the archive to validate its central directory, but only decompress
+    // text metadata. Binary assets are checked by their recorded size, avoiding a
+    // second full-memory copy at the most expensive point of the run.
     const zip = await JSZip.loadAsync(blob, {checkCRC32:true});
     const seen = new Set();
     for(const [raw, entry] of Object.entries(zip.files)){
       result.entries++;
       try { const path=safeZipPath(raw); if(seen.has(path)) result.errors.push(`Duplicate output path: ${path}`); seen.add(path); } catch(e){ result.errors.push(e.message); continue; }
-      if(!entry.dir){ const data=await entry.async('uint8array'); if(!data.length) result.warnings.push(`Empty output file: ${raw}`); if(/\.(json|mcmeta)$/i.test(raw)){ try{ JSON.parse(new TextDecoder().decode(data)); result.json++; }catch(_){ result.errors.push(`Invalid generated JSON: ${raw}`); } } }
+      if(entry.dir) continue;
+      const size=Number(entry._data?.uncompressedSize ?? entry._data?.compressedSize ?? 1);
+      if(size === 0) result.warnings.push(`Empty output file: ${raw}`);
+      if(/\.(json|mcmeta)$/i.test(raw)){
+        try{ JSON.parse(await entry.async('string')); result.json++; }catch(_){ result.errors.push(`Invalid generated JSON: ${raw}`); }
+      }
     }
     const required = direction === 'b2j' ? 'pack.mcmeta' : 'manifest.json';
     if(!seen.has(required)) result.errors.push(`Missing required ${required}`);
@@ -1257,7 +1268,7 @@ async function convertBedrockToJava(){
   files = stripRootPrefix(files); // item 9
   const total = Math.max(files.length * 5, 1); // 5 passes per file: manifest/icon, textures, flipbooks, models, sounds
   let done = 0;
-  const prog = ()=>{ done++; setProgress(5 + (done/total)*90, `Processing ${done}/${total} files…`); };
+  const prog = ()=>{ done++; if(done % 16 === 0 || done >= total) setProgress(5 + (done/total)*90, `Processing ${done}/${total} files…`); };
   setProgress(2,'Reading pack…'); await sleep(30);
 
   // Index of texture paths for model texture resolution
@@ -1393,13 +1404,13 @@ async function convertBedrockToJava(){
   if(settings.generateReport) out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
   log(settings.generateReport ? `■ Report: ${summary}` : `■ Conversion summary: ${summary}`, 'ok');
 
-  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.'] };
+  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, verification:{status:'checked after packaging'}, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.'] };
   if(settings.generateReport){ state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); out.file('packshift_report.json', JSON.stringify(report,null,2)); }
-  setProgress(99,'Compressing output…'); await sleep(20);
+  setProgress(99,'Packaging output…'); await yieldToBrowser();
   state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' });
   const verification = await verifyOutputZip(state.outZip, 'b2j'); renderVerification(verification); report.verification = verification;
   if(!verification.ok && settings.strictValidation) throw new Error('Strict validation rejected the generated Java pack');
-  if(settings.generateReport){ out.file('packshift_report.json', JSON.stringify(report,null,2)); state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' }); }
+  if(settings.generateReport) state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
   setProgress(100, `Done — ${(state.outZip.size/1024/1024).toFixed(2)} MB ready`);
   $('#downloadRow').style.display = 'block';
   log(`■ Conversion complete. ${out.filter(()=>true).length} files in output pack.`, 'ok');
@@ -1448,8 +1459,14 @@ function buildManifest(rules, name, description){
 /* ================================================================
    6. Orchestration & progress
    ================================================================ */
+let lastProgressPaint = 0;
 function setProgress(pct, label){
   pct = Math.max(0, Math.min(100, pct)); // clamp 0–100 everywhere
+  const now = performance.now();
+  // Progress is still calculated for every file, but painting is capped so large
+  // packs do not spend their conversion time in layout and text updates.
+  if(pct < 100 && now - lastProgressPaint < 60) return;
+  lastProgressPaint = now;
   $('#progressFill').style.width = pct + '%';
   $('#progressPct').textContent = Math.round(pct) + '%';
   if(label) $('#progressLabel').textContent = label;
@@ -1473,7 +1490,7 @@ async function convertPack(){
   files = stripRootPrefix(files); // item 9
   const total = Math.max(files.length * 4, 1); // texture×2, sounds, misc (3D models disabled)
   let done = 0;
-  const prog = ()=>{ done++; setProgress(5 + (done/total)*90, `Processing ${done}/${total} files…`); };
+  const prog = ()=>{ done++; if(done % 16 === 0 || done >= total) setProgress(5 + (done/total)*90, `Processing ${done}/${total} files…`); };
 
   setProgress(2,'Reading pack…'); await sleep(30);
   let description = '';
@@ -1507,13 +1524,13 @@ async function convertPack(){
   if(settings.generateReport) out.file('packshift_report.txt', `PackShift v${GENERATOR_VER} — ${dirLabel()} → ${$('#targetVersion').value} @ ${new Date().toISOString()}\n${summary}\n`);
   log(settings.generateReport ? `■ Report: ${summary}` : `■ Conversion summary: ${summary}`, 'ok');
 
-  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, custom_model_mappings:state.customMappings, animation_mappings:state.animationMappings, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.','Custom item mappings and attachables may require Geyser or behavior-pack wiring to become selectable in Bedrock.'] };
+  const report = { generator:GENERATOR, version:GENERATOR_VER, direction:dirLabel(), source:state.fileName, analysis:state.analysis, summary:RUN, custom_model_mappings:state.customMappings, animation_mappings:state.animationMappings, verification:{status:'checked after packaging'}, notes:['Conversion is best-effort and does not guarantee in-game semantic parity.','Unsupported assets are preserved or reported where possible.','Custom item mappings and attachables may require Geyser or behavior-pack wiring to become selectable in Bedrock.'] };
   if(settings.generateReport){ state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); out.file('packshift_report.json', JSON.stringify(report,null,2)); }
-  setProgress(99,'Compressing output…'); await sleep(20);
+  setProgress(99,'Packaging output…'); await yieldToBrowser();
   state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' });
   const verification = await verifyOutputZip(state.outZip, 'j2b'); renderVerification(verification); report.verification = verification;
   if(!verification.ok && settings.strictValidation) throw new Error('Strict validation rejected the generated Bedrock pack');
-  if(settings.generateReport){ out.file('packshift_report.json', JSON.stringify(report,null,2)); state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'}); state.outZip = await out.generateAsync({ type:'blob', mimeType:'application/zip', compression:'DEFLATE' }); }
+  if(settings.generateReport) state.reportBlob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
   setProgress(100, `Done — ${(state.outZip.size/1024/1024).toFixed(2)} MB ready`);
   $('#downloadRow').style.display = 'block';
   log(`■ Conversion complete. ${out.filter(()=>true).length} files in output pack.`, 'ok');
